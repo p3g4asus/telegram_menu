@@ -26,13 +26,14 @@ import imghdr
 import logging
 import mimetypes
 from pathlib import Path
+import traceback
 from typing import Any, List, Optional, Sequence, Type, Union
 
 import telegram.ext
 import tzlocal
 import validators
 from apscheduler.schedulers.base import BaseScheduler
-from telegram import Bot, Chat, InlineKeyboardMarkup, Message, ReplyKeyboardMarkup, Update
+from telegram import Bot, Chat, InlineKeyboardMarkup, LinkPreviewOptions, Message, ReplyKeyboardMarkup, Update
 from telegram._utils.defaultvalue import DEFAULT_NONE
 from telegram._utils.types import ODVInput
 from telegram.constants import ChatAction, ParseMode
@@ -205,14 +206,14 @@ class TelegramMenuSession:
         """Log Errors caused by Updates."""
         if not isinstance(update, Update):
             raise NavigationException("Incorrect update object")
-        error_message = str(context.error) if update is None else f"Update {update.update_id} - {str(context.error)}"
+        error_message = str(context.error) if update is None else f"Update {update.update_id} - {str(context.error)} [{traceback.format_tb(context.error.__traceback__)}]"
         logger.error(error_message)
 
-    async def broadcast_message(self, message: str, notification: bool = True) -> List[telegram.Message]:
+    async def broadcast_message(self, message: str, notification: bool = True, link_preview: LinkPreviewOptions = None) -> List[telegram.Message]:
         """Broadcast simple message without keyboard markup to all sessions."""
         messages = []
         for session in self.sessions:
-            msg = await session.send_message(message, notification=notification)
+            msg = await session.send_message(message, notification=notification, link_preview=link_preview)
             if msg is not None:
                 messages.append(msg)
         return messages
@@ -292,7 +293,8 @@ class NavigationHandler:
         del message
 
     async def goto_menu(
-        self, menu_message: BaseMessage, context: Optional[CallbackContext[BT, UD, CD, BD]] = None
+        self, menu_message: BaseMessage, context: Optional[CallbackContext[BT, UD, CD, BD]] = None,
+        add_if_present: bool = True, **_
     ) -> int:
         """Send menu message and add to queue."""
         content = await menu_message.get_updated_content(context)
@@ -303,15 +305,16 @@ class NavigationHandler:
                 menu_message.picture, notification=menu_message.notification, keyboard=keyboard, caption=content
             )
         else:
-            message = await self.send_message(content, keyboard, notification=menu_message.notification)
+            message = await self.send_message(content, keyboard, notification=menu_message.notification, link_preview=menu_message.link_preview)
         if message is None:
             return -1  # message was not sent, abort
         menu_message.is_alive()
         menu_message.message_id = message.message_id
-        self._menu_queue.append(menu_message)
+        if add_if_present or not self._menu_queue or self._menu_queue[-1] != menu_message:
+            self._menu_queue.append(menu_message)
         return message.message_id
 
-    async def goto_home(self, context: Optional[CallbackContext[BT, UD, CD, BD]] = None) -> int:
+    async def goto_home(self, context: Optional[CallbackContext[BT, UD, CD, BD]] = None, **kwargs) -> int:
         """Go to home menu, empty menu_queue."""
         if not self._menu_queue:
             return -1
@@ -321,7 +324,7 @@ class NavigationHandler:
         menu_previous = self._menu_queue.pop()
         while self._menu_queue:
             menu_previous = self._menu_queue.pop()
-        return await self.goto_menu(menu_previous, context)
+        return await self.goto_menu(menu_previous, context, **kwargs)
 
     @staticmethod
     def filter_unicode(input_string: str) -> str:
@@ -352,7 +355,7 @@ class NavigationHandler:
                 message.picture, notification=message.notification, caption=content, keyboard=keyboard
             )
         else:
-            msg = await self.send_message(content, keyboard, message.notification)
+            msg = await self.send_message(content, keyboard, message.notification, link_preview=message.link_preview)
         if msg is None:
             return -1  # message was not sent, abort
         message.message_id = msg.message_id
@@ -367,6 +370,7 @@ class NavigationHandler:
         content: str,
         keyboard: Optional[Union[ReplyKeyboardMarkup, InlineKeyboardMarkup]] = None,
         notification: bool = True,
+        link_preview: LinkPreviewOptions = None,
     ) -> telegram.Message:
         """Send a text message with html formatting."""
         return await self._bot.send_message(
@@ -375,11 +379,12 @@ class NavigationHandler:
             parse_mode=ParseMode.HTML,
             reply_markup=keyboard,
             disable_notification=not notification,
+            link_preview_options=link_preview
         )
 
     async def edit_message(
         self, message: BaseMessage, context: Optional[CallbackContext[BT, UD, CD, BD]] = None
-    ) -> bool:
+    ) -> bool | telegram.error.TelegramError:
         """Edit an inline message asynchronously."""
         message_updt = self.get_message(message.label)
         if message_updt is None:
@@ -407,10 +412,11 @@ class NavigationHandler:
                     message_id=message_updt.message_id,
                     parse_mode=ParseMode.HTML,
                     reply_markup=keyboard_format,
+                    link_preview_options=message_updt.link_preview,
                 )
-        except telegram.error.BadRequest as error:
+        except telegram.error.TelegramError as error:
             logger.error(error)
-            return False
+            return error
         return True
 
     @staticmethod
@@ -468,9 +474,16 @@ class NavigationHandler:
         """Process the user input in the last message updated."""
         last_menu_message = self._menu_queue[-1]
         if self._message_queue:
-            for last_app_message in self._message_queue[::-1]:
-                if last_app_message.time_alive > last_menu_message.time_alive:
-                    last_menu_message = last_app_message
+            mq = self._message_queue.copy()
+            mq.append(last_menu_message)
+            mq.sort(key=lambda x: x.time_alive, reverse=True)
+            last_menu_message = mq[0]
+            if label.startswith('/'):
+                for last_app_message in mq:
+                    if last_app_message.slash_message_processed(label):
+                        last_menu_message = last_app_message
+                        break
+        last_menu_message.is_alive()
         await last_menu_message.text_input(label, context)
 
     async def app_message_webapp_callback(self, webapp_data: str, button_text: str) -> None:
@@ -482,7 +495,7 @@ class NavigationHandler:
                 html_response = await webapp_message.callback(webapp_data)
             else:
                 html_response = webapp_message.callback(webapp_data)
-            await self.send_message(html_response, notification=webapp_message.notification)
+            await self.send_message(html_response, notification=webapp_message.notification, link_preview=webapp_message.link_preview)
 
     async def app_message_button_callback(
         self, callback_label: str, callback_id: str, context: Optional[CallbackContext[BT, UD, CD, BD]] = None
@@ -495,12 +508,12 @@ class NavigationHandler:
         if message is None:
             logger.error(f"Message with label {label_message} not found, return")
             return
+        message.is_alive()
         btn = message.get_button(label_action)
 
         if btn is None:
             logger.error(f"No button found with label {label_action}, return")
             return
-
         if btn.btype in [ButtonType.PICTURE, ButtonType.STICKER]:
             # noinspection PyTypeChecker
             await self._bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.UPLOAD_PHOTO)
@@ -531,13 +544,12 @@ class NavigationHandler:
             await self._bot.answer_callback_query(callback_id, text="Sticker sent!")
             return
         if btn.btype == ButtonType.MESSAGE:
-            await self.send_message(action_status, notification=btn.notification)
+            await self.send_message(action_status, notification=btn.notification, link_preview=btn.link_preview)
             await self._bot.answer_callback_query(callback_id, text="Message sent!")
             return
         await self._bot.answer_callback_query(callback_id, text=action_status)
 
         # update expiry period and update
-        message.is_alive()
         await self.edit_message(message, context)
 
     @staticmethod
@@ -562,7 +574,9 @@ class NavigationHandler:
     def _picture_check_replace(picture_path: str) -> Union[str, bytes]:
         """Check if the given picture path or uri is correct, replace by default if not."""
         try:
-            if validators.url(picture_path):
+            if not isinstance(picture_path, str):
+                return picture_path
+            elif validators.url(picture_path):
                 # check if the url has image format
                 mimetype, _ = mimetypes.guess_type(picture_path)
                 if mimetype and mimetype.startswith("image"):

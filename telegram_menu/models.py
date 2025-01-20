@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any, Callable, Coroutine, List, Optional, Unio
 import emoji
 import tzlocal
 import validators
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, LinkPreviewOptions, ReplyKeyboardMarkup, WebAppInfo
 from telegram.ext._callbackcontext import CallbackContext
 from telegram.ext._utils.types import BD, BT, CD, UD
 
@@ -89,6 +89,8 @@ class MenuButton:
         args: Any = None,
         notification: bool = True,
         web_app_url: str = "",
+        link_preview: LinkPreviewOptions = None,
+
     ):
         """Init MenuButton class."""
         self.label = emoji_replace(label)
@@ -97,6 +99,7 @@ class MenuButton:
         self.args = args
         self.notification = notification
         self.web_app_url = web_app_url
+        self.link_preview = link_preview
 
 
 class BaseMessage(ABC):
@@ -128,6 +131,7 @@ class BaseMessage(ABC):
         home_after: bool = False,
         notification: bool = True,
         input_field: str = "",
+        link_preview: LinkPreviewOptions = None,
         **args: Any,
     ) -> None:
         """Init BaseMessage class."""
@@ -138,6 +142,8 @@ class BaseMessage(ABC):
         self.notification = notification
         self.navigation = navigation
         self.input_field = input_field
+        self.time_alive = None
+        self.link_preview = link_preview
 
         # previous values are used to check if it has changed, to skip sending identical message
         self.keyboard_previous: TypeKeyboard = [[]]
@@ -164,6 +170,9 @@ class BaseMessage(ABC):
         """Update method that detects if update is a coroutine or not and calls it doing also the emoji replacement."""
         v = await call_function_EAFP(self.update, context)
         return emoji_replace(v) if v else v
+
+    def slash_message_processed(self, text: str) -> bool:
+        return True
 
     async def text_input(self, text: str, context: Optional[CallbackContext[BT, UD, CD, BD]] = None) -> None:
         """Receive text from console. If used, this function must be instantiated in the child class."""
