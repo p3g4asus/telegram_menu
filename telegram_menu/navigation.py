@@ -384,11 +384,11 @@ class NavigationHandler:
 
     async def edit_message(
         self, message: BaseMessage, context: Optional[CallbackContext[BT, UD, CD, BD]] = None
-    ) -> bool | telegram.error.TelegramError:
+    ) -> bool | Exception:
         """Edit an inline message asynchronously."""
         message_updt = self.get_message(message.label)
         if message_updt is None:
-            return False
+            return Exception('Message does not exist')
 
         # check if content and keyboard have changed since previous message
         content = await message_updt.get_updated_content(context)
@@ -414,6 +414,7 @@ class NavigationHandler:
                     reply_markup=keyboard_format,
                     link_preview_options=message_updt.link_preview,
                 )
+            message_updt.is_alive()
         except telegram.error.TelegramError as error:
             logger.error(error)
             return error
