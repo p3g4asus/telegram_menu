@@ -272,25 +272,28 @@ class NavigationHandler:
 
     async def _expiry_date_checker(self) -> None:
         """Check expiry date of message and delete if expired."""
-        for message in self._message_queue:
-            if message.has_expired():
-                await self._delete_queued_message(message)
+        try:
+            for message in self._message_queue:
+                if message.has_expired():
+                    await self._delete_queued_message(message)
 
-        # go back to home after sub-menu message has expired
-        if len(self._menu_queue) >= 2 and self._menu_queue[-1].has_expired():
-            await self.goto_home()
+            # go back to home after sub-menu message has expired
+            if len(self._menu_queue) >= 2 and self._menu_queue[-1].has_expired():
+                await self.goto_home()
+        except Exception as error:
+            logger.error(f"Error in expiry date checker: {error}")
 
     async def delete_message(self, message_id: int) -> None:
         """Delete a message from its id."""
-        await self._bot.delete_message(chat_id=self.chat_id, message_id=message_id)
+        return await self._bot.delete_message(chat_id=self.chat_id, message_id=message_id)
 
     async def _delete_queued_message(self, message: BaseMessage) -> None:
         """Delete a message, remove from queue."""
-        message.kill_message()
-        if message in self._message_queue:
-            self._message_queue.remove(message)
-            await self.delete_message(message.message_id)
-        del message
+        if await self.delete_message(message.message_id):
+            message.kill_message()
+            if message in self._message_queue:
+                self._message_queue.remove(message)
+            del message
 
     async def goto_menu(
         self, menu_message: BaseMessage, context: Optional[CallbackContext[BT, UD, CD, BD]] = None,
