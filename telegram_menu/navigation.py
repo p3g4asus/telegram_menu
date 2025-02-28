@@ -285,7 +285,11 @@ class NavigationHandler:
 
     async def delete_message(self, message_id: int) -> None:
         """Delete a message from its id."""
-        return await self._bot.delete_message(chat_id=self.chat_id, message_id=message_id)
+        try:
+            return await self._bot.delete_message(chat_id=self.chat_id, message_id=message_id)
+        except telegram.error.BadRequest:
+            # message already deleted
+            return True
 
     async def _delete_queued_message(self, message: BaseMessage) -> None:
         """Delete a message, remove from queue."""
