@@ -255,6 +255,7 @@ class NavigationHandler:
         self.user_name = chat.first_name
         self.poll_name = f"poll_{self.user_name}"
         self.location: Optional[telegram.Location] = None
+        self.debug_expiry = 0
 
         logger.info(f"Opening chat with user {self.user_name}")
 
@@ -265,7 +266,7 @@ class NavigationHandler:
         scheduler.add_job(
             self._expiry_date_checker,
             "interval",
-            id="state_nav_update",
+            id=f"state_nav_update{self.chat_id}",
             seconds=self.MESSAGE_CHECK_TIMEOUT,
             replace_existing=True,
         )
@@ -280,6 +281,17 @@ class NavigationHandler:
             # go back to home after sub-menu message has expired
             if len(self._menu_queue) >= 2 and self._menu_queue[-1].has_expired():
                 await self.goto_home()
+            self.debug_expiry += self.MESSAGE_CHECK_TIMEOUT
+            if self.debug_expiry >= 300:
+                self.debug_expiry = 0
+
+                def debug_lst(lst: list[BaseMessage], name: str) -> None:
+                    lbls = ''
+                    for i, message in enumerate(lst):
+                        lbls += f'{i}: {message.__class__.__name__}/{message.label} -{message.expiry_period}-[{datetime.datetime.now(tz=tzlocal.get_localzone()) - message.time_alive}], '
+                    logger.debug(f'EXPLST: {name} len mq {len(lst)}: {lbls}')
+                debug_lst(self._menu_queue, 'menu_queue')
+                debug_lst(self._message_queue, 'message_queue')
         except Exception as error:
             logger.error(f"Error in expiry date checker: {error}")
 
@@ -651,9 +663,8 @@ class NavigationHandler:
         self.scheduler.add_job(
             self.poll_delete,
             "date",
-            id=self.poll_name,
-            next_run_time=datetime.datetime.now(tz=tzlocal.get_localzone())
-            + datetime.timedelta(seconds=self.POLL_DEADLINE + 1),
+            id=self.poll_name + str(self.chat_id),
+            next_run_time=datetime.datetime.now(tz=tzlocal.get_localzone()) + datetime.timedelta(seconds=self.POLL_DEADLINE + 1),
             replace_existing=True,
         )
 
