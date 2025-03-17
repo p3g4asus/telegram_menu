@@ -129,9 +129,9 @@ class TelegramMenuSession:
         chat = update.effective_chat
         if chat is None:
             raise NavigationException("Chat object was not created")
-        ses = self.get_session(chat)
-        if ses:
-            await ses.goto_home(context)
+        session = self.get_session(chat)
+        if session:
+            await session.goto_home(context)
         else:
             if self.navigation_handler_class is None:
                 raise NavigationException("Navigation Handler class not defined")
