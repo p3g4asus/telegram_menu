@@ -129,17 +129,21 @@ class TelegramMenuSession:
         chat = update.effective_chat
         if chat is None:
             raise NavigationException("Chat object was not created")
-        if self.navigation_handler_class is None:
-            raise NavigationException("Navigation Handler class not defined")
-        session = self.navigation_handler_class(self.application.bot, chat, self.scheduler)
-        self.sessions.append(session)
-        if self.start_message_class is None:
-            raise NavigationException("Message class not defined")
-        if self.start_message_args is not None:
-            start_message = self.start_message_class(session, message_args=self.start_message_args)
+        ses = self.get_session(chat)
+        if ses:
+            await ses.goto_home(context)
         else:
-            start_message = self.start_message_class(session)
-        await session.goto_menu(start_message, context)
+            if self.navigation_handler_class is None:
+                raise NavigationException("Navigation Handler class not defined")
+            session = self.navigation_handler_class(self.application.bot, chat, self.scheduler)
+            self.sessions.append(session)
+            if self.start_message_class is None:
+                raise NavigationException("Message class not defined")
+            if self.start_message_args is not None:
+                start_message = self.start_message_class(session, message_args=self.start_message_args)
+            else:
+                start_message = self.start_message_class(session)
+            await session.goto_menu(start_message, context)
 
     def get_session(self, chat_id: int = 0) -> Optional[NavigationHandler]:
         """Get session from list."""
@@ -184,6 +188,8 @@ class TelegramMenuSession:
             return
         if update.callback_query.data and update.callback_query.id:
             await session.app_message_button_callback(update.callback_query.data, update.callback_query.id, context)
+        else:
+            logger.warning(f"NAVINL: No data ({update.callback_query.data} or id ({update.callback_query.id}) in callback query)")
 
     async def _button_webapp_callback(self, update: Update, context: CallbackContext[BT, UD, CD, BD]) -> None:
         """Execute webapp callback."""
@@ -289,7 +295,7 @@ class NavigationHandler:
                     lbls = ''
                     for i, message in enumerate(lst):
                         lbls += f'{i}: {message.__class__.__name__}/{message.label} -{message.expiry_period}-[{datetime.datetime.now(tz=tzlocal.get_localzone()) - message.time_alive}], '
-                    logger.debug(f'EXPLST: {name} len mq {len(lst)}: {lbls}')
+                    logger.debug(f'EXPLST: {name}[{self.chat_id}] len mq {len(lst)}: {lbls}')
                 debug_lst(self._menu_queue, 'menu_queue')
                 debug_lst(self._message_queue, 'message_queue')
         except Exception as error:
