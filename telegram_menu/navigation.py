@@ -364,8 +364,8 @@ class NavigationHandler:
         # if message with this label already exist in message_queue, delete it and replace it
         info_message = self.filter_unicode(f"Send message '{message.label}': '{label}'")
         logger.info(str(info_message))
-        if "_" not in message.label:
-            message.label = f"{message.label}_{label}"
+        if "@" not in message.label:
+            message.label = f"{message.label}@{label}"
 
         # delete message if already displayed
         message_existing = self.get_message(message.label)
