@@ -129,7 +129,7 @@ class TelegramMenuSession:
         chat = update.effective_chat
         if chat is None:
             raise NavigationException("Chat object was not created")
-        session = self.get_session(chat)
+        session = self.get_session(chat.id)
         if session:
             await session.goto_home(context)
         else:
