@@ -330,6 +330,8 @@ class NavigationHandler:
                 menu_message.picture, notification=menu_message.notification, keyboard=keyboard, caption=content
             )
         else:
+            message = None
+        if message is None:
             message = await self.send_message(content, keyboard, notification=menu_message.notification, link_preview=menu_message.link_preview)
         if message is None:
             return -1  # message was not sent, abort
@@ -380,6 +382,8 @@ class NavigationHandler:
                 message.picture, notification=message.notification, caption=content, keyboard=keyboard
             )
         else:
+            msg = None
+        if msg is None:
             msg = await self.send_message(content, keyboard, message.notification, link_preview=message.link_preview)
         if msg is None:
             return -1  # message was not sent, abort
