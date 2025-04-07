@@ -325,7 +325,6 @@ class NavigationHandler:
         content = await menu_message.get_updated_content(context)
         logger.info(f"Opening menu {menu_message.label}")
         keyboard = menu_message.gen_keyboard_content()
-        picture = menu_message.picture
         if menu_message.picture:
             message = await self.send_photo(
                 menu_message.picture, notification=menu_message.notification, keyboard=keyboard, caption=content
@@ -333,11 +332,10 @@ class NavigationHandler:
         else:
             message = None
         if message is None:
-            if menu_message.picture:
-                menu_message.picture = None
             message = await self.send_message(content, keyboard, notification=menu_message.notification, link_preview=menu_message.link_preview)
+            if message and menu_message.picture:
+                menu_message.picture = None
         if message is None:
-            menu_message.picture = picture
             return -1  # message was not sent, abort
         menu_message.is_alive()
         menu_message.message_id = message.message_id
@@ -381,7 +379,6 @@ class NavigationHandler:
         message.is_alive()
 
         keyboard = message.gen_inline_keyboard_content()
-        picture = message.picture
         if message.picture:
             msg = await self.send_photo(
                 message.picture, notification=message.notification, caption=content, keyboard=keyboard
@@ -389,11 +386,10 @@ class NavigationHandler:
         else:
             msg = None
         if msg is None:
-            if message.picture:
-                message.picture = None
             msg = await self.send_message(content, keyboard, message.notification, link_preview=message.link_preview)
+            if msg and message.picture:
+                message.picture = None
         if msg is None:
-            message.picture = picture
             return -1  # message was not sent, abort
         message.message_id = msg.message_id
         self._message_queue.append(message)
