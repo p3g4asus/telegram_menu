@@ -208,10 +208,20 @@ class TelegramMenuSession:
         )
 
     @staticmethod
+    async def check_flood_and_wait(error_obj: telegram.error.RetryAfter, print: bool = True) -> None:
+        """Check if flood error, wait for retry."""
+        if isinstance(error_obj, telegram.error.RetryAfter):
+            logger.warning(f"Flood error, waiting {error_obj.retry_after} seconds")
+            await asyncio.sleep(error_obj.retry_after + 1)  # add 1 second to
+        elif print:
+            raise logger.error(error_obj)
+
+    @staticmethod
     async def _msg_error_handler(update: object, context: CallbackContext[BT, UD, CD, BD]) -> None:  # type: ignore
         """Log Errors caused by Updates."""
         if not isinstance(update, Update):
             raise NavigationException("Incorrect update object")
+        await TelegramMenuSession.check_flood_and_wait(context.error, print=False)
         error_message = str(context.error) if update is None else f"Update {update.update_id} - {str(context.error)} [{traceback.format_tb(context.error.__traceback__)}]"
         logger.error(error_message)
 
@@ -449,7 +459,7 @@ class NavigationHandler:
                 )
             message_updt.is_alive()
         except telegram.error.TelegramError as error:
-            logger.error(error)
+            await TelegramMenuSession.check_flood_and_wait(error, print=True)
             return error
         return True
 
