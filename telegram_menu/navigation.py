@@ -214,7 +214,7 @@ class TelegramMenuSession:
             logger.warning(f"Flood error, waiting {error_obj.retry_after} seconds")
             await asyncio.sleep(error_obj.retry_after + 1)  # add 1 second to
         elif print:
-            raise logger.error(error_obj)
+            logger.error(error_obj)
 
     @staticmethod
     async def _msg_error_handler(update: object, context: CallbackContext[BT, UD, CD, BD]) -> None:  # type: ignore
