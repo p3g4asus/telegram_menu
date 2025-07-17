@@ -23,11 +23,13 @@ import datetime
 import logging
 import re
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Any, Callable, Coroutine, List, Optional, Union
 
 import emoji
+import telegram
 import tzlocal
 import validators
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, LinkPreviewOptions, ReplyKeyboardMarkup, WebAppInfo
@@ -42,6 +44,27 @@ logger = logging.getLogger(__name__)
 
 TypeCallback = Optional[Union[Callable[..., Any], Coroutine[Any, Any, None], "BaseMessage"]]
 TypeKeyboard = List[List["MenuButton"]]
+
+AttachmentType = Union[telegram.Animation,
+                       telegram.Audio,
+                       telegram.Contact,
+                       telegram.Dice,
+                       telegram.Document,
+                       telegram.Game,
+                       telegram.Invoice,
+                       telegram.Location,
+                       telegram.PassportData,
+                       Sequence[telegram.PhotoSize],
+                       telegram.PaidMediaInfo,
+                       telegram.Poll,
+                       telegram.Sticker,
+                       telegram.Story,
+                       telegram.SuccessfulPayment,
+                       telegram.Venue,
+                       telegram.Video,
+                       telegram.VideoNote,
+                       telegram.Voice
+]
 
 
 async def call_function_EAFP(method: TypeCallback, par: Any, *args: Any, **kwargs: Any) -> Any:
@@ -176,6 +199,9 @@ class BaseMessage(ABC):
 
     async def text_input(self, text: str, context: Optional[CallbackContext[BT, UD, CD, BD]] = None) -> None:
         """Receive text from console. If used, this function must be instantiated in the child class."""
+
+    async def file_input(self, text: str, attachment: AttachmentType, context: Optional[CallbackContext[BT, UD, CD, BD]] = None) -> None:
+        pass
 
     def get_button(self, label: str) -> Optional[MenuButton]:
         """Get button matching given label."""

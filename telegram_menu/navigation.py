@@ -83,6 +83,7 @@ class TelegramMenuSession:
 
         # on different commands - answer in Telegram
         self.application.add_handler(CommandHandler(start_message, self._send_start_message))
+        self.application.add_handler(MessageHandler(telegram.ext.filters.ATTACHMENT, self._file_send_callback))
         self.application.add_handler(MessageHandler(telegram.ext.filters.TEXT, self._button_select_callback))
         self.application.add_handler(
             MessageHandler(telegram.ext.filters.StatusUpdate.WEB_APP_DATA, self._button_webapp_callback)
@@ -169,6 +170,16 @@ class TelegramMenuSession:
             return
         if update.message.text:
             await session.select_menu_button(update.message.text, context)
+
+    async def _file_send_callback(self, update: Update, context: CallbackContext[BT, UD, CD, BD]) -> None:
+        """Menu message main entry point."""
+        if update.effective_chat is None or update.message is None:
+            raise NavigationException("Chat object was not created")
+        session = self.get_session(update.effective_chat.id)
+        if session is None:
+            await self._send_start_message(update, context)
+            return
+        await session.send_message_to_fiile(update.message, context)
 
     async def _poll_answer(self, update: Update, _: CallbackContext[BT, UD, CD, BD]) -> None:
         """Entry point for poll selection."""
@@ -476,6 +487,10 @@ class NavigationHandler:
         message.keyboard_previous = message.keyboard.copy()
         return True
 
+    async def send_message_to_fiile(self, message: Message, context: Optional[CallbackContext[BT, UD, CD, BD]] = None) -> Optional[int]:
+        if (a := message.effective_attachment) and ((t := message.caption) or (t := message.text) or ((d := message.document) and (t := d.file_name))):
+            await self.get_message_for_input(t).file_input(t, a, context)
+
     async def select_menu_button(
         self, label: str, context: Optional[CallbackContext[BT, UD, CD, BD]] = None
     ) -> Optional[int]:  # noqa: C901
@@ -514,8 +529,7 @@ class NavigationHandler:
         await self.capture_user_input(label, context)
         return None
 
-    async def capture_user_input(self, label: str, context: Optional[CallbackContext[BT, UD, CD, BD]] = None) -> None:
-        """Process the user input in the last message updated."""
+    def get_message_for_input(self, label: str) -> Optional[BaseMessage]:
         last_menu_message = self._menu_queue[-1]
         if self._message_queue:
             mq = self._message_queue.copy()
@@ -528,7 +542,11 @@ class NavigationHandler:
                         last_menu_message = last_app_message
                         break
         last_menu_message.is_alive()
-        await last_menu_message.text_input(label, context)
+        return last_menu_message
+
+    async def capture_user_input(self, label: str, context: Optional[CallbackContext[BT, UD, CD, BD]] = None) -> None:
+        """Process the user input in the last message updated."""
+        await self.get_message_for_input(label).text_input(label, context)
 
     async def app_message_webapp_callback(self, webapp_data: str, button_text: str) -> None:
         """Execute the callback associated to this webapp."""
