@@ -20,10 +20,10 @@
 
 __title__ = "telegram_menu"
 __description__ = "A python library to generate navigation menus using Telegram Bot API."
-__url__ = "https://github.com/mevellea/telegram_menu"
-__raw_url__ = "https://raw.githubusercontent.com/mevellea/telegram_menu/master"
-__version__ = "2.1.16"
+__url__ = "https://github.com/p3g4asus/telegram_menu"
+__raw_url__ = "https://raw.githubusercontent.com/p3g4asus/telegram_menu/enhanced_navigation"
+__version__ = "2.1.17"
 __author__ = "Armel Mevellec"
 __author_email__ = "mevellea@gmail.com"
 __license__ = "GNU GPLv3"
-__copyright__ = "Copyright 2020-2023 " + __author__
+__copyright__ = "Copyright 2020-2026 " + __author__
