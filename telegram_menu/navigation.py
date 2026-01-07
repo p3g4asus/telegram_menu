@@ -488,8 +488,8 @@ class NavigationHandler:
         return True
 
     async def send_message_to_fiile(self, message: Message, context: Optional[CallbackContext[BT, UD, CD, BD]] = None) -> Optional[int]:
-        if (a := message.effective_attachment) and ((t := message.caption) or (t := message.text) or ((d := message.document) and (t := d.file_name))):
-            await self.get_message_for_input(t).file_input(t, a, context)
+        if (a := message.effective_attachment) and ((t := message.caption) or (t := message.text) or ((d := message.document) and (t := d.file_name))) and (mfi := self.get_message_for_input(t)):
+            await mfi.file_input(t, a, context)
 
     async def select_menu_button(
         self, label: str, context: Optional[CallbackContext[BT, UD, CD, BD]] = None
@@ -530,23 +530,28 @@ class NavigationHandler:
         return None
 
     def get_message_for_input(self, label: str) -> Optional[BaseMessage]:
-        last_menu_message = self._menu_queue[-1]
-        if self._message_queue:
-            mq = self._message_queue.copy()
-            mq.append(last_menu_message)
-            mq.sort(key=lambda x: x.time_alive, reverse=True)
-            last_menu_message = mq[0]
-            if label.startswith('/'):
-                for last_app_message in mq:
-                    if last_app_message.slash_message_processed(label):
-                        last_menu_message = last_app_message
-                        break
-        last_menu_message.is_alive()
-        return last_menu_message
+        if not self._menu_queue:
+            return None
+        else:
+            last_menu_message = self._menu_queue[-1]
+            if self._message_queue:
+                mq = self._message_queue.copy()
+                mq.append(last_menu_message)
+                mq.sort(key=lambda x: x.time_alive, reverse=True)
+                last_menu_message = mq[0]
+                if label.startswith('/'):
+                    for last_app_message in mq:
+                        if last_app_message.slash_message_processed(label):
+                            last_menu_message = last_app_message
+                            break
+            last_menu_message.is_alive()
+            return last_menu_message
 
     async def capture_user_input(self, label: str, context: Optional[CallbackContext[BT, UD, CD, BD]] = None) -> None:
         """Process the user input in the last message updated."""
-        await self.get_message_for_input(label).text_input(label, context)
+        mfi = self.get_message_for_input(label)
+        if mfi:
+            await mfi.text_input(label, context)
 
     async def app_message_webapp_callback(self, webapp_data: str, button_text: str) -> None:
         """Execute the callback associated to this webapp."""
